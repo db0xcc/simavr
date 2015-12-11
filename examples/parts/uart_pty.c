@@ -212,7 +212,12 @@ uart_pty_thread(
 						dst < (buffer + sizeof(buffer)))
 					*dst++ = uart_pty_fifo_read(&p->port[ti].in);
 				size_t len = dst - buffer;
-				TRACE(size_t r =) write(p->port[ti].s, buffer, len);
+				size_t r = write(p->port[ti].s, buffer, len);
+				if (r<0) {
+					perror("write pty");
+				} else if (r<len) {
+					fprintf(stderr,"pty write of %ld bytes truncated to %ld\n",len,r);
+				}
 				TRACE(if (!p->port[ti].tap) hdump("pty send", buffer, r);)
 			}
 		}
@@ -229,6 +234,9 @@ static const char * irq_names[IRQ_UART_PTY_COUNT] = {
 	[IRQ_UART_PTY_BYTE_OUT] = "8>uart_pty.out",
 };
 
+
+#define CHECK_ENV(s) (getenv(s) && atoi(getenv(s)))
+
 void
 uart_pty_init(
 		struct avr_t * avr,
@@ -240,8 +248,9 @@ uart_pty_init(
 	p->irq = avr_alloc_irq(&avr->irq_pool, 0, IRQ_UART_PTY_COUNT, irq_names);
 	avr_irq_register_notify(p->irq + IRQ_UART_PTY_BYTE_IN, uart_pty_in_hook, p);
 
-	int hastap = (getenv("SIMAVR_UART_TAP") && atoi(getenv("SIMAVR_UART_TAP"))) ||
-			(getenv("SIMAVR_UART_XTERM") && atoi(getenv("SIMAVR_UART_XTERM"))) ;
+	int hastap = ( CHECK_ENV("SIMAVR_UART_TAP")
+	             | CHECK_ENV("SIMAVR_UART_XTERM") 
+	             | CHECK_ENV("SIMAVR_UART_SCREEN") );
 
 	for (int ti = 0; ti < 1 + hastap; ti++) {
 		int m, s;
@@ -312,12 +321,23 @@ uart_pty_connect(
 			printf("%s: %s now points to %s\n", __func__, link, p->port[ti].slavename);
 		}
 	}
-	if (getenv("SIMAVR_UART_XTERM") && atoi(getenv("SIMAVR_UART_XTERM"))) {
-		char cmd[256];
+
+	char cmd[256]="";
+	if (CHECK_ENV("SIMAVR_UART_XTERM")) {
 		sprintf(cmd, "xterm -e picocom -b 115200 %s >/dev/null 2>&1 &",
 				p->tap.slavename);
-		system(cmd);
-	} else
-		printf("note: export SIMAVR_UART_XTERM=1 and install picocom to get a terminal\n");
+	} else if (CHECK_ENV("SIMAVR_UART_SCREEN")) {
+		sprintf(cmd, "xterm -e screen %s &",
+				p->tap.slavename);
+    }
+    if (cmd[0]) {
+        printf("launching: [%s]\n",cmd);
+		if (system(cmd) < 0) {
+			perror("system");
+		}
+	} else {
+		printf("note: export SIMAVR_UART_XTERM=1 and install picocom to auto spawn a terminal\n"
+			   "   or export SIMAVR_UART_SCREEN=1 and install screen to auto spawn a terminal\n");
+	}
 }
 
