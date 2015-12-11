@@ -42,10 +42,11 @@ sim_o 	:= ${patsubst sim/%.c, ${OBJ}/%.o, ${sim}}
 
 VPATH	= cores
 VPATH	+= sim
+VPATH   += ../examples/parts
 
 IPATH	+= sim
 IPATH	+= .
-IPATH	+= ../../shared
+IPATH   += ../examples/parts
     
 #
 # Static library
@@ -77,6 +78,11 @@ libsimavr	: config ${OBJ}/libsimavr.a
 ifeq (${shell uname}, Linux)
 libsimavr	:	${OBJ}/libsimavr.so
 endif
+
+
+LDFLAGS += -lpthread -lutil
+
+${OBJ}/${target}.elf    : ${OBJ}/uart_pty.o
 
 ${OBJ}/${target}.elf	: ${OBJ}/${target}.o
 

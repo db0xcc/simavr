@@ -29,13 +29,15 @@
 #include "sim_core.h"
 #include "sim_gdb.h"
 #include "sim_hex.h"
+#include "uart_pty.h"
 
 #include "sim_core_decl.h"
 
 void display_usage(char * app)
 {
-	printf("Usage: %s [-t] [-g] [-v] [-m <device>] [-f <frequency>] firmware\n", app);
+	printf("Usage: %s [-t] [-s] [-g] [-v] [-m <device>] [-f <frequency>] firmware\n", app);
 	printf("       -t: Run full scale decoder trace\n"
+		   "       -s: Serial port connected to pty\n"
 		   "       -g: Listen for gdb connection on port 1234\n"
 		   "       -ff: Load next .hex file as flash\n"
 		   "       -ee: Load next .hex file as eeprom\n"
@@ -51,6 +53,9 @@ void display_usage(char * app)
 }
 
 avr_t * avr = NULL;
+
+int serialpty = 0;
+uart_pty_t uart_pty;
 
 void
 sig_int(
@@ -92,6 +97,8 @@ int main(int argc, char *argv[])
 				display_usage(basename(argv[0]));
 		} else if (!strcmp(argv[pi], "-t") || !strcmp(argv[pi], "-trace")) {
 			trace++;
+		} else if (!strcmp(argv[pi], "-s") || !strcmp(argv[pi], "-serialpty")) {
+			serialpty++;
 		} else if (!strcmp(argv[pi], "-ti")) {
 			if (pi < argc-1)
 				trace_vectors[trace_vectors_count++] = atoi(argv[++pi]);
@@ -176,6 +183,11 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, sig_int);
 	signal(SIGTERM, sig_int);
+
+	if (serialpty) {
+		uart_pty_init(avr, &uart_pty);
+		uart_pty_connect(&uart_pty, '0');
+	}
 
 	for (;;) {
 		int state = avr_run(avr);
